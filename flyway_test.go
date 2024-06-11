@@ -7,6 +7,7 @@ import (
 	"github.com/CyberOwlTeam/flyway"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/go-connections/nat"
+	"github.com/google/uuid"
 	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -18,40 +19,48 @@ import (
 )
 
 const (
-	defaultPostgresDbVersion     = "13.7"
-	defaultPostgresContainerName = "test_db_container"
-	defaultPostgresPort          = "5432"
-	defaultPostgresDbName        = "test_db"
-	defaultPostgresDbUsername    = "postgres"
-	defaultPostgresDbPassword    = "postgres"
+	defaultPostgresDbVersion  = "16.3"
+	defaultPostgresPort       = "5432"
+	defaultPostgresDbName     = "test_db"
+	defaultPostgresDbUsername = "postgres"
+	defaultPostgresDbPassword = "postgres"
 )
 
 type intPostgresContainer struct {
 	*tcpostgres.PostgresContainer
 }
 
-func (c *intPostgresContainer) getInternalUrl(t testing.TB, ctx context.Context) string {
-	inspect, err := c.Inspect(ctx)
-	require.NoError(t, err)
-	return fmt.Sprintf("jdbc:postgresql:/%s:%s/%s", inspect.Name, defaultPostgresPort, defaultPostgresDbName)
+func (c *intPostgresContainer) getInternalUrl(ctx context.Context) (string, error) {
+	json, err := c.Inspect(ctx)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("jdbc:postgresql:/%s:%s/%s", json.Name, defaultPostgresPort, defaultPostgresDbName), nil
 }
 
-func (c *intPostgresContainer) getExternalUrl(t testing.TB, ctx context.Context) string {
+func (c *intPostgresContainer) getExternalUrl(ctx context.Context) (string, error) {
 	url, err := c.ConnectionString(ctx)
-	require.NoError(t, err)
-	return fmt.Sprintf("%ssslmode=disable", url) // disable ssl
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%ssslmode=disable", url), nil // disable ssl
 }
 
 func TestFlyway(t *testing.T) {
 	// given
 	ctx := context.Background()
-	networkContainer := createTestNetworkContainer(t, ctx)
-	postgresContainer := createTestPostgresContainer(t, ctx, networkContainer)
+	networkContainer, err := createTestNetwork(ctx)
+	require.NoError(t, err, "failed creating network container")
+	postgresContainer, err := createTestPostgresContainer(ctx, networkContainer)
+	require.NoError(t, err, "failed creating postgres container")
+	postgresUrl, err := postgresContainer.getInternalUrl(ctx)
+	require.NoError(t, err, "failed getting internal postgres url")
 
 	// when
 	flywayContainer, err := flyway.RunContainer(ctx,
+		testcontainers.WithImage(flyway.BuildFlywayImageVersion()),
 		flyway.WithNetwork(networkContainer.Name),
-		flyway.WithEnvUrl(postgresContainer.getInternalUrl(t, ctx)),
+		flyway.WithEnvUrl(postgresUrl),
 		flyway.WithEnvUser(defaultPostgresDbUsername),
 		flyway.WithEnvPassword(defaultPostgresDbPassword),
 	)
@@ -74,19 +83,15 @@ func TestFlyway(t *testing.T) {
 	require.Equal(t, 0, state.ExitCode, "container exit code was not as expected: migration failed")
 }
 
-func createTestNetworkContainer(t testing.TB, ctx context.Context) *testcontainers.DockerNetwork {
-	networkContainer, err := tcnetwork.New(ctx)
-	require.NoError(t, err)
-	require.NotNil(t, networkContainer)
-	return networkContainer
+func createTestNetwork(ctx context.Context) (*testcontainers.DockerNetwork, error) {
+	return tcnetwork.New(ctx)
 }
 
-func createTestPostgresContainer(t testing.TB, ctx context.Context, networkContainer *testcontainers.DockerNetwork) *intPostgresContainer {
-	posgresContainerName := defaultPostgresContainerName
+func createTestPostgresContainer(ctx context.Context, networkContainer *testcontainers.DockerNetwork) (*intPostgresContainer, error) {
 	port := fmt.Sprintf("%s/tcp", defaultPostgresPort)
 
 	postgresContainer, err := tcpostgres.RunContainer(ctx,
-		withNetwork(posgresContainerName, networkContainer.Name),
+		tcnetwork.WithNetwork([]string{"db"}, networkContainer),
 		testcontainers.WithImage(fmt.Sprintf("postgres:%s", defaultPostgresDbVersion)),
 		tcpostgres.WithDatabase(defaultPostgresDbName),
 		tcpostgres.WithUsername(defaultPostgresDbUsername),
@@ -101,37 +106,45 @@ func createTestPostgresContainer(t testing.TB, ctx context.Context, networkConta
 				WithOccurrence(2).
 				WithStartupTimeout(10*time.Second)),
 	)
-	require.NoError(t, err)
+	if err != nil {
+		return nil, err
+	}
 
 	return &intPostgresContainer{
 		postgresContainer,
-	}
-}
-
-func withNetwork(name, network string) testcontainers.CustomizeRequestOption {
-	return func(req *testcontainers.GenericContainerRequest) error {
-		req.Name = name
-		req.Networks = []string{network}
-		return nil
-	}
+	}, nil
 }
 
 func requireQuery(t testing.TB, ctx context.Context, postgresContainer *intPostgresContainer) {
-	db, err := sql.Open("postgres", postgresContainer.getExternalUrl(t, ctx))
-	require.NoError(t, err)
+	postgresUrl, err := postgresContainer.getExternalUrl(ctx)
+	require.NoError(t, err, "failed getting external postgres url")
+
+	db, err := sql.Open("postgres", postgresUrl)
+	require.NoError(t, err, "failed opening sql connection to postgres")
 	defer db.Close()
 
 	err = db.Ping()
 	require.NoError(t, err)
 
-	rows, err := db.Query("SELECT id, stuff_id FROM other_stuff")
+	tx, err := db.BeginTx(ctx, nil)
 	require.NoError(t, err)
+	defer tx.Rollback()
+
+	_, err = tx.ExecContext(ctx, "INSERT INTO stuff (name) VALUES($1)", "test")
+	require.NoError(t, err)
+
+	err = tx.Commit()
+	require.NoError(t, err)
+
+	rows, err := db.Query("SELECT id, name, created_timestamp FROM stuff")
+	require.NoError(t, err, "failed querying postgres")
 	defer rows.Close()
 
 	for rows.Next() {
-		var id int
+		var id uuid.UUID
 		var name string
-		err := rows.Scan(&id, &name)
+		var created time.Time
+		err := rows.Scan(&id, &name, &created)
 		require.NoError(t, err)
 	}
 

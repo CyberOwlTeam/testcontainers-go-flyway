@@ -10,13 +10,11 @@ import (
 )
 
 const (
-	DefaultFlywayVersion        = "10.10.0"
+	DefaultFlywayVersion        = "10.15.0"
 	defaultFlywayImagePattern   = "flyway/flyway:%s"
-	defaultFlywayContainerName  = "test_flyway_container"
-	defaultNetworkContainerName = "test_network_container"
 	defaultFlywayUser           = "test_user"
 	defaultFlywayPassword       = "test_password"
-	defaultFlywayDbUrl          = "test_flyway"
+	defaultFlywayDbUrl          = "test_flyway_db"
 	defaultFlywayTable          = "schema_version"
 	defaultFlywayMigrationsPath = "/flyway/sql"
 	migrateCmd                  = "migrate"
@@ -38,10 +36,7 @@ type FlywayContainer struct {
 // RunContainer creates an instance of the Flyway container type
 func RunContainer(ctx context.Context, opts ...testcontainers.ContainerCustomizer) (*FlywayContainer, error) {
 	req := testcontainers.ContainerRequest{
-		Name:       defaultFlywayContainerName,
-		Image:      BuildFlywayImageVersion(DefaultFlywayVersion),
 		WaitingFor: wait.ForExit().WithExitTimeout(30 * time.Second),
-		Networks:   []string{defaultNetworkContainerName},
 		Env: map[string]string{
 			flywayEnvUserKey:           defaultFlywayUser,
 			flywayEnvPasswordKey:       defaultFlywayPassword,
@@ -78,38 +73,50 @@ func RunContainer(ctx context.Context, opts ...testcontainers.ContainerCustomize
 		return nil, err
 	}
 
-	return &FlywayContainer{Container: container}, nil
+	state, err := container.State(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get container state: %s", err)
+	} else if state.ExitCode != 0 {
+		if state.Health != nil {
+			return nil, fmt.Errorf("the container state is not healthy: %d/%s", state.ExitCode, state.Health.Status)
+		}
+		return nil, fmt.Errorf("the container state is not healthy: %d", state.ExitCode)
+	}
+
+	return &FlywayContainer{
+		Container: container,
+	}, nil
 }
 
 func WithEnvUser(user string) testcontainers.CustomizeRequestOption {
-	return WithEnv("FLYWAY_USER", user)
+	return withEnvSetting("FLYWAY_USER", user)
 }
 
 func WithEnvPassword(password string) testcontainers.CustomizeRequestOption {
-	return WithEnv("FLYWAY_PASSWORD", password)
+	return withEnvSetting("FLYWAY_PASSWORD", password)
 }
 
 func WithEnvUrl(dbUrl string) testcontainers.CustomizeRequestOption {
-	return WithEnv("FLYWAY_URL", dbUrl)
+	return withEnvSetting("FLYWAY_URL", dbUrl)
 }
 
 func WithEnvGroup(group string) testcontainers.CustomizeRequestOption {
-	return WithEnv("GROUP", group)
+	return withEnvSetting("GROUP", group)
 }
 
 func WithEnvTable(table string) testcontainers.CustomizeRequestOption {
-	return WithEnv("FLYWAY_TABLE", table)
+	return withEnvSetting("FLYWAY_TABLE", table)
 }
 
 func WithEnvConnectRetries(retries int) testcontainers.CustomizeRequestOption {
-	return WithEnv("FLYWAY_CONNECT_RETRIES", strconv.Itoa(retries))
+	return withEnvSetting("FLYWAY_CONNECT_RETRIES", strconv.Itoa(retries))
 }
 
 func WithEnvLocations(locations string) testcontainers.CustomizeRequestOption {
-	return WithEnv("FLYWAY_LOCATIONS", locations)
+	return withEnvSetting("FLYWAY_LOCATIONS", locations)
 }
 
-func WithEnv(key, group string) testcontainers.CustomizeRequestOption {
+func withEnvSetting(key, group string) testcontainers.CustomizeRequestOption {
 	return func(req *testcontainers.GenericContainerRequest) error {
 		req.Env[key] = group
 		return nil
@@ -121,10 +128,6 @@ func WithNetwork(network string) testcontainers.CustomizeRequestOption {
 		req.Networks = append(req.Networks, network)
 		return nil
 	}
-}
-
-func WithLocations(absHostFilePath string, containerFilePaths ...string) testcontainers.CustomizeRequestOption {
-	return WithMigrations(absHostFilePath, containerFilePaths...)
 }
 
 func WithMigrations(absHostFilePath string, containerFilePaths ...string) testcontainers.CustomizeRequestOption {
@@ -142,6 +145,9 @@ func WithMigrations(absHostFilePath string, containerFilePaths ...string) testco
 	}
 }
 
-func BuildFlywayImageVersion(version string) string {
-	return fmt.Sprintf(defaultFlywayImagePattern, version)
+func BuildFlywayImageVersion(version ...string) string {
+	if len(version) > 0 {
+		return fmt.Sprintf(defaultFlywayImagePattern, version[0])
+	}
+	return fmt.Sprintf(defaultFlywayImagePattern, DefaultFlywayVersion)
 }
