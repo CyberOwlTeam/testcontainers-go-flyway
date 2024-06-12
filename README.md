@@ -8,6 +8,7 @@ To use this component you must do the following in order
 - create & run a database container : contains the database to be migrated, references the network above
 - create & run a flyway container (this container) : configured to specify the necessary flyway migrations, uses the network above
 
-**NOTE:** this will only migrate the database, it will not insert data in that database.
+**NOTE:** this will only migrate the database, it will not insert data in that database, unless
+the migrations themselves contains data inserts of course.
 
-Please refer to the https://flywaydb.org/ site for mor information on flyway itself.
+Please refer to the https://flywaydb.org/ site for more information on flyway itself.
