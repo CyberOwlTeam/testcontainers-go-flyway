@@ -86,32 +86,28 @@ func RunContainer(ctx context.Context, opts ...testcontainers.ContainerCustomize
 	}, nil
 }
 
-func WithEnvUser(user string) testcontainers.CustomizeRequestOption {
+func WithUser(user string) testcontainers.CustomizeRequestOption {
 	return withEnvSetting("FLYWAY_USER", user)
 }
 
-func WithEnvPassword(password string) testcontainers.CustomizeRequestOption {
+func WithPassword(password string) testcontainers.CustomizeRequestOption {
 	return withEnvSetting("FLYWAY_PASSWORD", password)
 }
 
-func WithEnvUrl(dbUrl string) testcontainers.CustomizeRequestOption {
+func WithDatabaseUrl(dbUrl string) testcontainers.CustomizeRequestOption {
 	return withEnvSetting("FLYWAY_URL", dbUrl)
 }
 
-func WithEnvGroup(group string) testcontainers.CustomizeRequestOption {
+func WithGroup(group string) testcontainers.CustomizeRequestOption {
 	return withEnvSetting("GROUP", group)
 }
 
-func WithEnvTable(table string) testcontainers.CustomizeRequestOption {
+func WithTable(table string) testcontainers.CustomizeRequestOption {
 	return withEnvSetting("FLYWAY_TABLE", table)
 }
 
-func WithEnvConnectRetries(retries int) testcontainers.CustomizeRequestOption {
+func WithConnectRetries(retries int) testcontainers.CustomizeRequestOption {
 	return withEnvSetting("FLYWAY_CONNECT_RETRIES", strconv.Itoa(retries))
-}
-
-func WithEnvLocations(locations string) testcontainers.CustomizeRequestOption {
-	return withEnvSetting("FLYWAY_LOCATIONS", locations)
 }
 
 func withEnvSetting(key, group string) testcontainers.CustomizeRequestOption {
@@ -120,15 +116,14 @@ func withEnvSetting(key, group string) testcontainers.CustomizeRequestOption {
 	})
 }
 
-func WithMigrations(absHostFilePath string) testcontainers.CustomizeRequestOption {
+func WithLocations(absHostFilePath string) testcontainers.CustomizeRequestOption {
 	return func(req *testcontainers.GenericContainerRequest) error {
 		req.Files = []testcontainers.ContainerFile{{
 			HostFilePath:      absHostFilePath,
 			ContainerFilePath: DefaultMigrationsPath,
 		}}
 
-		req.Env["FLYWAY_LOCATIONS"] = fmt.Sprintf("filesystem:%s", DefaultMigrationsPath)
-		return nil
+		return withEnvSetting("FLYWAY_LOCATIONS", fmt.Sprintf("filesystem:%s", DefaultMigrationsPath))(req)
 	}
 }
 

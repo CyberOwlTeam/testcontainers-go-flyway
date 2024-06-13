@@ -59,10 +59,10 @@ func TestFlyway(t *testing.T) {
 	flywayContainer, err := flyway.RunContainer(ctx,
 		testcontainers.WithImage(flyway.BuildFlywayImageVersion()),
 		tcnetwork.WithNetwork([]string{"flyway"}, nw),
-		flyway.WithEnvUrl(postgresContainer.getNetworkUrl()),
-		flyway.WithEnvUser(defaultPostgresDbUsername),
-		flyway.WithEnvPassword(defaultPostgresDbPassword),
-		flyway.WithMigrations(filepath.Join("testdata", flyway.DefaultMigrationsPath)),
+		flyway.WithDatabaseUrl(postgresContainer.getNetworkUrl()),
+		flyway.WithUser(defaultPostgresDbUsername),
+		flyway.WithPassword(defaultPostgresDbPassword),
+		flyway.WithLocations(filepath.Join("testdata", flyway.DefaultMigrationsPath)),
 	)
 	require.NoError(t, err, "failed to run container")
 
