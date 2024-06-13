@@ -33,12 +33,8 @@ type intPostgresContainer struct {
 	*tcpostgres.PostgresContainer
 }
 
-func (c *intPostgresContainer) getInternalUrl(ctx context.Context) (string, error) {
-	json, err := c.Inspect(ctx)
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("jdbc:postgresql:/%s:%s/%s", json.Name, defaultPostgresPort, defaultPostgresDbName), nil
+func (c *intPostgresContainer) getInternalUrl() string {
+	return fmt.Sprintf("jdbc:postgresql:/%s:%s/%s?sslmode=disable", defaultPostgresSrvName, defaultPostgresPort, defaultPostgresDbName)
 }
 
 func (c *intPostgresContainer) getExternalUrl(ctx context.Context) (string, error) {
@@ -58,14 +54,11 @@ func TestFlyway(t *testing.T) {
 	postgresContainer, err := createTestPostgresContainer(ctx, nw)
 	require.NoError(t, err, "failed creating postgres container")
 
-	postgresUrl, err := postgresContainer.getInternalUrl(ctx)
-	require.NoError(t, err, "failed getting internal postgres url")
-
 	// when
 	flywayContainer, err := flyway.RunContainer(ctx,
 		testcontainers.WithImage(flyway.BuildFlywayImageVersion()),
 		tcnetwork.WithNetwork([]string{"flyway"}, nw),
-		flyway.WithEnvUrl(postgresUrl),
+		flyway.WithEnvUrl(postgresContainer.getInternalUrl()),
 		flyway.WithEnvUser(defaultPostgresDbUsername),
 		flyway.WithEnvPassword(defaultPostgresDbPassword),
 	)

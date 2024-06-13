@@ -22,15 +22,11 @@ func ExampleRunContainer() {
 	if err != nil {
 		log.Fatalf("failed to start postgres container: %s", err) // nolint:gocritic
 	}
-	postgresUrl, err := postgresContainer.getInternalUrl(ctx)
-	if err != nil {
-		log.Fatalf("failed to get external postgres url: %s", err) // nolint:gocritic
-	}
 
 	flywayContainer, err := flyway.RunContainer(ctx,
 		testcontainers.WithImage(flyway.BuildFlywayImageVersion()),
 		tcnetwork.WithNetwork([]string{"flyway"}, nw),
-		flyway.WithEnvUrl(postgresUrl),
+		flyway.WithEnvUrl(postgresContainer.getInternalUrl()),
 		flyway.WithEnvUser(defaultPostgresDbUsername),
 		flyway.WithEnvPassword(defaultPostgresDbPassword),
 	)
