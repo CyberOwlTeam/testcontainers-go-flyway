@@ -3,9 +3,11 @@ package flyway_test
 import (
 	"context"
 	"fmt"
-	"github.com/CyberOwlTeam/flyway"
-	"github.com/testcontainers/testcontainers-go"
 	"log"
+
+	"github.com/CyberOwlTeam/flyway"
+
+	"github.com/testcontainers/testcontainers-go"
 )
 
 func ExampleRunContainer() {
