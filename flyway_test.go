@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -61,6 +62,7 @@ func TestFlyway(t *testing.T) {
 		flyway.WithEnvUrl(postgresContainer.getNetworkUrl()),
 		flyway.WithEnvUser(defaultPostgresDbUsername),
 		flyway.WithEnvPassword(defaultPostgresDbPassword),
+		flyway.WithMigrations(filepath.Join("testdata", flyway.DefaultFlywayMigrationsPath)),
 	)
 	require.NoError(t, err, "failed to run container")
 

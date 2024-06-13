@@ -3,7 +3,6 @@ package flyway
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"strconv"
 	"time"
 
@@ -18,7 +17,7 @@ const (
 	defaultFlywayPassword       = "test_password"
 	defaultFlywayDbUrl          = "test_flyway_db"
 	defaultFlywayTable          = "schema_version"
-	defaultFlywayMigrationsPath = "flyway/sql"
+	DefaultFlywayMigrationsPath = "flyway/sql"
 	migrateCmd                  = "migrate"
 	infoCmd                     = "info"
 	flywayEnvUserKey            = "FLYWAY_USER"
@@ -46,13 +45,7 @@ func RunContainer(ctx context.Context, opts ...testcontainers.ContainerCustomize
 			flywayEnvGrouopKey:         "true",
 			flywayEnvTableKey:          defaultFlywayTable,
 			flywayEnvConnectRetriesKey: "3",
-			flywayEnvLocationsKey:      fmt.Sprintf("filesystem:/%s", defaultFlywayMigrationsPath),
-		},
-		Files: []testcontainers.ContainerFile{
-			{
-				HostFilePath:      filepath.Join("testdata", defaultFlywayMigrationsPath),
-				ContainerFilePath: "/" + defaultFlywayMigrationsPath,
-			},
+			flywayEnvLocationsKey:      fmt.Sprintf("filesystem:/%s", DefaultFlywayMigrationsPath),
 		},
 		Cmd: []string{
 			migrateCmd, infoCmd,
@@ -125,17 +118,14 @@ func withEnvSetting(key, group string) testcontainers.CustomizeRequestOption {
 	}
 }
 
-func WithMigrations(absHostFilePath string, containerFilePaths ...string) testcontainers.CustomizeRequestOption {
+func WithMigrations(absHostFilePath string) testcontainers.CustomizeRequestOption {
 	return func(req *testcontainers.GenericContainerRequest) error {
-		containerFilePath := defaultFlywayMigrationsPath
-		if len(containerFilePaths) > 0 && containerFilePaths[0] != "" {
-			containerFilePath = containerFilePaths[0]
-		}
 		req.Files = []testcontainers.ContainerFile{{
 			HostFilePath:      absHostFilePath,
-			ContainerFilePath: containerFilePath,
+			ContainerFilePath: DefaultFlywayMigrationsPath,
 		}}
-		req.Env["FLYWAY_LOCATIONS"] = fmt.Sprintf("filesystem:/%s", containerFilePath)
+
+		req.Env["FLYWAY_LOCATIONS"] = fmt.Sprintf("filesystem:/%s", DefaultFlywayMigrationsPath)
 		return nil
 	}
 }

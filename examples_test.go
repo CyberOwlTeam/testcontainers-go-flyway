@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"path/filepath"
 
 	"github.com/CyberOwlTeam/flyway"
 
@@ -29,6 +30,7 @@ func ExampleRunContainer() {
 		flyway.WithEnvUrl(postgresContainer.getNetworkUrl()),
 		flyway.WithEnvUser(defaultPostgresDbUsername),
 		flyway.WithEnvPassword(defaultPostgresDbPassword),
+		flyway.WithMigrations(filepath.Join("testdata", flyway.DefaultFlywayMigrationsPath)),
 	)
 	if err != nil {
 		log.Fatalf("failed to start container: %s", err) // nolint:gocritic
