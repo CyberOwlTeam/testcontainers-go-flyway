@@ -83,7 +83,7 @@ func TestFlyway(t *testing.T) {
 	require.Equal(t, 0, state.ExitCode, "container exit code was not as expected: migration failed")
 }
 
-func TestFlyway_parseInvalidReques(t *testing.T) {
+func TestFlyway_parseInvalidRequest(t *testing.T) {
 	tests := []struct {
 		name string
 		opts []testcontainers.ContainerCustomizer
@@ -129,8 +129,6 @@ func TestFlyway_parseInvalidReques(t *testing.T) {
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(tt *testing.T) {
 			testCase := testCase
-
-			//tt.Parallel()
 
 			flywayContainer, err := flyway.RunContainer(context.Background(),
 				testCase.opts...,
@@ -179,17 +177,13 @@ func requireQuery(t testing.TB, ctx context.Context, postgresContainer *intPostg
 	defer db.Close()
 
 	err = db.Ping()
-	require.NoError(t, err)
+	require.NoError(t, err, "failed to ping postgres")
 
-	tx, err := db.BeginTx(ctx, nil)
-	require.NoError(t, err)
-	defer tx.Rollback()
-
-	_, err = tx.ExecContext(ctx, "INSERT INTO stuff (name) VALUES($1)", "test")
-	require.NoError(t, err)
-
-	err = tx.Commit()
-	require.NoError(t, err)
+	err = executeAsTransaction(db, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, "INSERT INTO stuff (name) VALUES($1)", "test")
+		return err
+	})
+	require.NoError(t, err, "failed to execute postgres transaction")
 
 	rows, err := db.Query("SELECT id, name, created_timestamp FROM stuff")
 	require.NoError(t, err, "failed querying postgres")
@@ -200,9 +194,28 @@ func requireQuery(t testing.TB, ctx context.Context, postgresContainer *intPostg
 		var name string
 		var created time.Time
 		err := rows.Scan(&id, &name, &created)
-		require.NoError(t, err)
+		require.NoError(t, err, "failed to scan postgres")
 	}
 
 	err = rows.Err()
-	require.NoError(t, err)
+	require.NoError(t, err, "postgres error")
+}
+
+func executeAsTransaction(db *sql.DB, fUpdate func(*sql.Tx) error) (err error) {
+	tx, err := db.Begin()
+	if err != nil {
+		return
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			_ = tx.Rollback()
+			err = fmt.Errorf("panic occurred in transaction: %v", p)
+		} else if err != nil {
+			_ = tx.Rollback()
+		} else {
+			err = tx.Commit()
+		}
+	}()
+	err = fUpdate(tx)
+	return err
 }

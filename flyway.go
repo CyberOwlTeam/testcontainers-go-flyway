@@ -15,9 +15,6 @@ const (
 	DefaultMigrationsPath = "/flyway/sql"
 
 	defaultImagePattern = "flyway/flyway:%s"
-	defaultUser         = "test_user"
-	defaultPassword     = "test_password"
-	defaultDbUrl        = "test_flyway_db"
 	defaultTable        = "schema_version"
 	migrateCmd          = "migrate"
 	infoCmd             = "info"
@@ -29,7 +26,7 @@ const (
 	flywayEnvUserKey           = "FLYWAY_USER"
 	flywayEnvPasswordKey       = "FLYWAY_PASSWORD"
 	flywayEnvUrlKey            = "FLYWAY_URL"
-	flywayEnvGrouopKey         = "FLYWAY_GROUP"
+	flywayEnvGroupKey          = "FLYWAY_GROUP"
 	flywayEnvTableKey          = "FLYWAY_TABLE"
 	flywayEnvConnectRetriesKey = "FLYWAY_CONNECT_RETRIES"
 	flywayEnvLocationsKey      = "FLYWAY_LOCATIONS"
@@ -49,7 +46,7 @@ type FlywayContainer struct {
 func RunContainer(ctx context.Context, opts ...testcontainers.ContainerCustomizer) (*FlywayContainer, error) {
 	req := testcontainers.ContainerRequest{
 		Env: map[string]string{
-			flywayEnvGrouopKey:         "true",
+			flywayEnvGroupKey:          "true",
 			flywayEnvTableKey:          defaultTable,
 			flywayEnvConnectRetriesKey: "3",
 			flywayEnvLocationsKey:      fmt.Sprintf("filesystem:%s", DefaultMigrationsPath),
@@ -86,7 +83,7 @@ func RunContainer(ctx context.Context, opts ...testcontainers.ContainerCustomize
 
 	state, err := container.State(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get container state: %s", err)
+		return nil, fmt.Errorf("failed to get container state: %w", err)
 	} else if state.ExitCode != 0 {
 		if state.Health != nil {
 			return nil, fmt.Errorf("the container state is not healthy: %d/%s", state.ExitCode, state.Health.Status)
