@@ -26,7 +26,7 @@ func ExampleRunContainer() {
 	flywayContainer, err := flyway.RunContainer(ctx,
 		testcontainers.WithImage(flyway.BuildFlywayImageVersion()),
 		tcnetwork.WithNetwork([]string{"flyway"}, nw),
-		flyway.WithEnvUrl(postgresContainer.getInternalUrl()),
+		flyway.WithEnvUrl(postgresContainer.getNetworkUrl()),
 		flyway.WithEnvUser(defaultPostgresDbUsername),
 		flyway.WithEnvPassword(defaultPostgresDbPassword),
 	)

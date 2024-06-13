@@ -33,7 +33,7 @@ type intPostgresContainer struct {
 	*tcpostgres.PostgresContainer
 }
 
-func (c *intPostgresContainer) getInternalUrl() string {
+func (c *intPostgresContainer) getNetworkUrl() string {
 	return fmt.Sprintf("jdbc:postgresql:/%s:%s/%s?sslmode=disable", defaultPostgresSrvName, defaultPostgresPort, defaultPostgresDbName)
 }
 
@@ -58,7 +58,7 @@ func TestFlyway(t *testing.T) {
 	flywayContainer, err := flyway.RunContainer(ctx,
 		testcontainers.WithImage(flyway.BuildFlywayImageVersion()),
 		tcnetwork.WithNetwork([]string{"flyway"}, nw),
-		flyway.WithEnvUrl(postgresContainer.getInternalUrl()),
+		flyway.WithEnvUrl(postgresContainer.getNetworkUrl()),
 		flyway.WithEnvUser(defaultPostgresDbUsername),
 		flyway.WithEnvPassword(defaultPostgresDbPassword),
 	)
