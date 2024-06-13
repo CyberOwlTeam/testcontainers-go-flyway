@@ -34,7 +34,7 @@ type intPostgresContainer struct {
 }
 
 func (c *intPostgresContainer) getNetworkUrl() string {
-	return fmt.Sprintf("jdbc:postgresql:/%s:%s/%s?sslmode=disable", defaultPostgresSrvName, defaultPostgresPort, defaultPostgresDbName)
+	return fmt.Sprintf("jdbc:postgresql://%s:%s/%s?sslmode=disable", defaultPostgresSrvName, defaultPostgresPort, defaultPostgresDbName)
 }
 
 func (c *intPostgresContainer) getExternalUrl(ctx context.Context) (string, error) {

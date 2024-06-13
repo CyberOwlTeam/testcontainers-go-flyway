@@ -3,6 +3,7 @@ package flyway
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -17,7 +18,7 @@ const (
 	defaultFlywayPassword       = "test_password"
 	defaultFlywayDbUrl          = "test_flyway_db"
 	defaultFlywayTable          = "schema_version"
-	defaultFlywayMigrationsPath = "/flyway/sql"
+	defaultFlywayMigrationsPath = "flyway/sql"
 	migrateCmd                  = "migrate"
 	infoCmd                     = "info"
 	flywayEnvUserKey            = "FLYWAY_USER"
@@ -45,12 +46,12 @@ func RunContainer(ctx context.Context, opts ...testcontainers.ContainerCustomize
 			flywayEnvGrouopKey:         "true",
 			flywayEnvTableKey:          defaultFlywayTable,
 			flywayEnvConnectRetriesKey: "3",
-			flywayEnvLocationsKey:      fmt.Sprintf("filesystem:%s", defaultFlywayMigrationsPath),
+			flywayEnvLocationsKey:      fmt.Sprintf("filesystem:/%s", defaultFlywayMigrationsPath),
 		},
 		Files: []testcontainers.ContainerFile{
 			{
-				HostFilePath:      fmt.Sprintf("./test%s", defaultFlywayMigrationsPath),
-				ContainerFilePath: defaultFlywayMigrationsPath,
+				HostFilePath:      filepath.Join("test", defaultFlywayMigrationsPath),
+				ContainerFilePath: "/" + defaultFlywayMigrationsPath,
 			},
 		},
 		Cmd: []string{
@@ -134,7 +135,7 @@ func WithMigrations(absHostFilePath string, containerFilePaths ...string) testco
 			HostFilePath:      absHostFilePath,
 			ContainerFilePath: containerFilePath,
 		}}
-		req.Env["FLYWAY_LOCATIONS"] = fmt.Sprintf("filesystem:%s", containerFilePath)
+		req.Env["FLYWAY_LOCATIONS"] = fmt.Sprintf("filesystem:/%s", containerFilePath)
 		return nil
 	}
 }
