@@ -3,33 +3,39 @@ package flyway_test
 import (
 	"context"
 	"fmt"
-	"github.com/CyberOwlTeam/flyway"
-	"github.com/testcontainers/testcontainers-go"
 	"log"
+	"path/filepath"
+	"time"
+
+	"github.com/CyberOwlTeam/flyway"
+
+	"github.com/testcontainers/testcontainers-go"
+	tcnetwork "github.com/testcontainers/testcontainers-go/network"
 )
 
 func ExampleRunContainer() {
 	// runFlywayContainer {
 	ctx := context.Background()
-	networkContainer, err := createTestNetwork(ctx)
+	nw, err := tcnetwork.New(ctx)
 	if err != nil {
 		log.Fatalf("failed to start network: %s", err) // nolint:gocritic
 	}
-	postgresContainer, err := createTestPostgresContainer(ctx, networkContainer)
+	postgresContainer, err := createTestPostgresContainer(ctx, nw)
 	if err != nil {
 		log.Fatalf("failed to start postgres container: %s", err) // nolint:gocritic
-	}
-	postgresUrl, err := postgresContainer.getInternalUrl(ctx)
-	if err != nil {
-		log.Fatalf("failed to get external postgres url: %s", err) // nolint:gocritic
 	}
 
 	flywayContainer, err := flyway.RunContainer(ctx,
 		testcontainers.WithImage(flyway.BuildFlywayImageVersion()),
-		flyway.WithNetwork(networkContainer.Name),
-		flyway.WithEnvUrl(postgresUrl),
-		flyway.WithEnvUser(defaultPostgresDbUsername),
-		flyway.WithEnvPassword(defaultPostgresDbPassword),
+		tcnetwork.WithNetwork([]string{"flyway"}, nw),
+		flyway.WithDatabaseUrl(postgresContainer.getNetworkUrl()),
+		flyway.WithUser(defaultPostgresDbUsername),
+		flyway.WithPassword(defaultPostgresDbPassword),
+		flyway.WithConnectRetries(3),
+		flyway.WithTable("my_schema_history"),
+		flyway.WithGroup("my_group"),
+		flyway.WithTimeout(1*time.Minute),
+		flyway.WithMigrations(filepath.Join("testdata", flyway.DefaultMigrationsPath)),
 	)
 	if err != nil {
 		log.Fatalf("failed to start container: %s", err) // nolint:gocritic

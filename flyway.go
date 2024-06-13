@@ -3,29 +3,41 @@ package flyway
 import (
 	"context"
 	"fmt"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
 	"strconv"
 	"time"
+
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 const (
-	DefaultFlywayVersion        = "10.15.0"
-	defaultFlywayImagePattern   = "flyway/flyway:%s"
-	defaultFlywayUser           = "test_user"
-	defaultFlywayPassword       = "test_password"
-	defaultFlywayDbUrl          = "test_flyway_db"
-	defaultFlywayTable          = "schema_version"
-	defaultFlywayMigrationsPath = "/flyway/sql"
-	migrateCmd                  = "migrate"
-	infoCmd                     = "info"
-	flywayEnvUserKey            = "FLYWAY_USER"
-	flywayEnvPasswordKey        = "FLYWAY_PASSWORD"
-	flywayEnvUrlKey             = "FLYWAY_URL"
-	flywayEnvGrouopKey          = "FLYWAY_GROUP"
-	flywayEnvTableKey           = "FLYWAY_TABLE"
-	flywayEnvConnectRetriesKey  = "FLYWAY_CONNECT_RETRIES"
-	flywayEnvLocationsKey       = "FLYWAY_LOCATIONS"
+	DefaultVersion        = "10.15.0"
+	DefaultMigrationsPath = "/flyway/sql"
+
+	defaultImagePattern = "flyway/flyway:%s"
+	defaultUser         = "test_user"
+	defaultPassword     = "test_password"
+	defaultDbUrl        = "test_flyway_db"
+	defaultTable        = "schema_version"
+	migrateCmd          = "migrate"
+	infoCmd             = "info"
+
+	// wait strategies
+	defaultTimeout time.Duration = 30 * time.Second
+
+	// flyway environment variables
+	flywayEnvUserKey           = "FLYWAY_USER"
+	flywayEnvPasswordKey       = "FLYWAY_PASSWORD"
+	flywayEnvUrlKey            = "FLYWAY_URL"
+	flywayEnvGrouopKey         = "FLYWAY_GROUP"
+	flywayEnvTableKey          = "FLYWAY_TABLE"
+	flywayEnvConnectRetriesKey = "FLYWAY_CONNECT_RETRIES"
+	flywayEnvLocationsKey      = "FLYWAY_LOCATIONS"
+)
+
+var (
+	waitForValidated = wait.ForLog(`Successfully validated \d+ migration[s]?`).AsRegexp().WithOccurrence(1)
+	waitForApplied   = wait.ForLog(`Successfully applied \d+ migration[s]? to schema`).AsRegexp().WithOccurrence(1)
 )
 
 // FlywayContainer represents the Flyway container type used in the module
@@ -36,25 +48,20 @@ type FlywayContainer struct {
 // RunContainer creates an instance of the Flyway container type
 func RunContainer(ctx context.Context, opts ...testcontainers.ContainerCustomizer) (*FlywayContainer, error) {
 	req := testcontainers.ContainerRequest{
-		WaitingFor: wait.ForExit().WithExitTimeout(30 * time.Second),
 		Env: map[string]string{
-			flywayEnvUserKey:           defaultFlywayUser,
-			flywayEnvPasswordKey:       defaultFlywayPassword,
-			flywayEnvUrlKey:            defaultFlywayDbUrl,
 			flywayEnvGrouopKey:         "true",
-			flywayEnvTableKey:          defaultFlywayTable,
+			flywayEnvTableKey:          defaultTable,
 			flywayEnvConnectRetriesKey: "3",
-			flywayEnvLocationsKey:      fmt.Sprintf("filesystem:%s", defaultFlywayMigrationsPath),
-		},
-		Files: []testcontainers.ContainerFile{
-			{
-				HostFilePath:      fmt.Sprintf("./test%s", defaultFlywayMigrationsPath),
-				ContainerFilePath: defaultFlywayMigrationsPath,
-			},
+			flywayEnvLocationsKey:      fmt.Sprintf("filesystem:%s", DefaultMigrationsPath),
 		},
 		Cmd: []string{
 			migrateCmd, infoCmd,
 		},
+		WaitingFor: wait.ForAll(
+			wait.ForExit().WithExitTimeout(defaultTimeout),
+			waitForApplied,
+			waitForValidated,
+		),
 	}
 
 	genericContainerReq := testcontainers.GenericContainerRequest{
@@ -66,6 +73,10 @@ func RunContainer(ctx context.Context, opts ...testcontainers.ContainerCustomize
 		if err := opt.Customize(&genericContainerReq); err != nil {
 			return nil, fmt.Errorf("failed to customize flyway container: %w", err)
 		}
+	}
+
+	if err := parseRequest(genericContainerReq); err != nil {
+		return nil, err
 	}
 
 	container, err := testcontainers.GenericContainer(ctx, genericContainerReq)
@@ -88,66 +99,99 @@ func RunContainer(ctx context.Context, opts ...testcontainers.ContainerCustomize
 	}, nil
 }
 
-func WithEnvUser(user string) testcontainers.CustomizeRequestOption {
+func parseRequest(req testcontainers.GenericContainerRequest) error {
+	// parse migrations
+	const migrationsErrMessage string = "Please use flyway.WithMigrations() option to provide migrations"
+
+	if req.Env[flywayEnvLocationsKey] == "" {
+		return fmt.Errorf("missing migrations: environment variable %s is empty. %s", flywayEnvLocationsKey, migrationsErrMessage)
+	}
+
+	if len(req.Files) == 0 {
+		return fmt.Errorf("missing migrations: no files provided. %s", migrationsErrMessage)
+	} else {
+		migrationsFound := false
+		for _, file := range req.Files {
+			if file.ContainerFilePath == DefaultMigrationsPath {
+				migrationsFound = true
+			}
+		}
+
+		if !migrationsFound {
+			return fmt.Errorf("missing migrations: %s", migrationsErrMessage)
+		}
+	}
+
+	// parse connection settings
+	if req.Env[flywayEnvUrlKey] == "" {
+		return fmt.Errorf("missing database url: environment variable %s is empty", flywayEnvUrlKey)
+	}
+	if req.Env[flywayEnvUserKey] == "" {
+		return fmt.Errorf("missing user: environment variable %s is empty", flywayEnvUserKey)
+	}
+	if req.Env[flywayEnvPasswordKey] == "" {
+		return fmt.Errorf("missing password: environment variable %s is empty", flywayEnvPasswordKey)
+	}
+
+	return nil
+}
+
+func WithUser(user string) testcontainers.CustomizeRequestOption {
 	return withEnvSetting("FLYWAY_USER", user)
 }
 
-func WithEnvPassword(password string) testcontainers.CustomizeRequestOption {
+func WithPassword(password string) testcontainers.CustomizeRequestOption {
 	return withEnvSetting("FLYWAY_PASSWORD", password)
 }
 
-func WithEnvUrl(dbUrl string) testcontainers.CustomizeRequestOption {
+func WithDatabaseUrl(dbUrl string) testcontainers.CustomizeRequestOption {
 	return withEnvSetting("FLYWAY_URL", dbUrl)
 }
 
-func WithEnvGroup(group string) testcontainers.CustomizeRequestOption {
+func WithTimeout(timeout time.Duration) testcontainers.CustomizeRequestOption {
+	return func(req *testcontainers.GenericContainerRequest) error {
+		req.WaitingFor = wait.ForAll(
+			wait.ForExit().WithExitTimeout(timeout),
+			waitForApplied,
+			waitForValidated,
+		)
+
+		return nil
+	}
+}
+
+func WithGroup(group string) testcontainers.CustomizeRequestOption {
 	return withEnvSetting("GROUP", group)
 }
 
-func WithEnvTable(table string) testcontainers.CustomizeRequestOption {
+func WithTable(table string) testcontainers.CustomizeRequestOption {
 	return withEnvSetting("FLYWAY_TABLE", table)
 }
 
-func WithEnvConnectRetries(retries int) testcontainers.CustomizeRequestOption {
+func WithConnectRetries(retries int) testcontainers.CustomizeRequestOption {
 	return withEnvSetting("FLYWAY_CONNECT_RETRIES", strconv.Itoa(retries))
 }
 
-func WithEnvLocations(locations string) testcontainers.CustomizeRequestOption {
-	return withEnvSetting("FLYWAY_LOCATIONS", locations)
-}
-
 func withEnvSetting(key, group string) testcontainers.CustomizeRequestOption {
-	return func(req *testcontainers.GenericContainerRequest) error {
-		req.Env[key] = group
-		return nil
-	}
+	return testcontainers.WithEnv(map[string]string{
+		key: group,
+	})
 }
 
-func WithNetwork(network string) testcontainers.CustomizeRequestOption {
+func WithMigrations(absHostFilePath string) testcontainers.CustomizeRequestOption {
 	return func(req *testcontainers.GenericContainerRequest) error {
-		req.Networks = append(req.Networks, network)
-		return nil
-	}
-}
-
-func WithMigrations(absHostFilePath string, containerFilePaths ...string) testcontainers.CustomizeRequestOption {
-	return func(req *testcontainers.GenericContainerRequest) error {
-		containerFilePath := defaultFlywayMigrationsPath
-		if len(containerFilePaths) > 0 && containerFilePaths[0] != "" {
-			containerFilePath = containerFilePaths[0]
-		}
 		req.Files = []testcontainers.ContainerFile{{
 			HostFilePath:      absHostFilePath,
-			ContainerFilePath: containerFilePath,
+			ContainerFilePath: DefaultMigrationsPath,
 		}}
-		req.Env["FLYWAY_LOCATIONS"] = fmt.Sprintf("filesystem:%s", containerFilePath)
-		return nil
+
+		return withEnvSetting("FLYWAY_LOCATIONS", fmt.Sprintf("filesystem:%s", DefaultMigrationsPath))(req)
 	}
 }
 
 func BuildFlywayImageVersion(version ...string) string {
 	if len(version) > 0 {
-		return fmt.Sprintf(defaultFlywayImagePattern, version[0])
+		return fmt.Sprintf(defaultImagePattern, version[0])
 	}
-	return fmt.Sprintf(defaultFlywayImagePattern, DefaultFlywayVersion)
+	return fmt.Sprintf(defaultImagePattern, DefaultVersion)
 }
