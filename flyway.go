@@ -116,7 +116,7 @@ func withEnvSetting(key, group string) testcontainers.CustomizeRequestOption {
 	})
 }
 
-func WithLocations(absHostFilePath string) testcontainers.CustomizeRequestOption {
+func WithMigrations(absHostFilePath string) testcontainers.CustomizeRequestOption {
 	return func(req *testcontainers.GenericContainerRequest) error {
 		req.Files = []testcontainers.ContainerFile{{
 			HostFilePath:      absHostFilePath,
