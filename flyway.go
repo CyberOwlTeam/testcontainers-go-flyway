@@ -115,10 +115,9 @@ func WithEnvLocations(locations string) testcontainers.CustomizeRequestOption {
 }
 
 func withEnvSetting(key, group string) testcontainers.CustomizeRequestOption {
-	return func(req *testcontainers.GenericContainerRequest) error {
-		req.Env[key] = group
-		return nil
-	}
+	return testcontainers.WithEnv(map[string]string{
+		key: group,
+	})
 }
 
 func WithMigrations(absHostFilePath string) testcontainers.CustomizeRequestOption {
