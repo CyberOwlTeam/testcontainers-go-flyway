@@ -49,9 +49,6 @@ type FlywayContainer struct {
 func RunContainer(ctx context.Context, opts ...testcontainers.ContainerCustomizer) (*FlywayContainer, error) {
 	req := testcontainers.ContainerRequest{
 		Env: map[string]string{
-			flywayEnvUserKey:           defaultUser,
-			flywayEnvPasswordKey:       defaultPassword,
-			flywayEnvUrlKey:            defaultDbUrl,
 			flywayEnvGrouopKey:         "true",
 			flywayEnvTableKey:          defaultTable,
 			flywayEnvConnectRetriesKey: "3",
@@ -78,6 +75,10 @@ func RunContainer(ctx context.Context, opts ...testcontainers.ContainerCustomize
 		}
 	}
 
+	if err := parseRequest(genericContainerReq); err != nil {
+		return nil, err
+	}
+
 	container, err := testcontainers.GenericContainer(ctx, genericContainerReq)
 	if err != nil {
 		return nil, err
@@ -96,6 +97,43 @@ func RunContainer(ctx context.Context, opts ...testcontainers.ContainerCustomize
 	return &FlywayContainer{
 		Container: container,
 	}, nil
+}
+
+func parseRequest(req testcontainers.GenericContainerRequest) error {
+	// parse migrations
+	const migrationsErrMessage string = "Please use flyway.WithMigrations() option to provide migrations"
+
+	if req.Env[flywayEnvLocationsKey] == "" {
+		return fmt.Errorf("missing migrations: environment variable %s is empty. %s", flywayEnvLocationsKey, migrationsErrMessage)
+	}
+
+	if len(req.Files) == 0 {
+		return fmt.Errorf("missing migrations: no files provided. %s", migrationsErrMessage)
+	} else {
+		migrationsFound := false
+		for _, file := range req.Files {
+			if file.ContainerFilePath == DefaultMigrationsPath {
+				migrationsFound = true
+			}
+		}
+
+		if !migrationsFound {
+			return fmt.Errorf("missing migrations: %s", migrationsErrMessage)
+		}
+	}
+
+	// parse connection settings
+	if req.Env[flywayEnvUrlKey] == "" {
+		return fmt.Errorf("missing database url: environment variable %s is empty", flywayEnvUrlKey)
+	}
+	if req.Env[flywayEnvUserKey] == "" {
+		return fmt.Errorf("missing user: environment variable %s is empty", flywayEnvUserKey)
+	}
+	if req.Env[flywayEnvPasswordKey] == "" {
+		return fmt.Errorf("missing password: environment variable %s is empty", flywayEnvPasswordKey)
+	}
+
+	return nil
 }
 
 func WithUser(user string) testcontainers.CustomizeRequestOption {

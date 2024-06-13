@@ -83,6 +83,65 @@ func TestFlyway(t *testing.T) {
 	require.Equal(t, 0, state.ExitCode, "container exit code was not as expected: migration failed")
 }
 
+func TestFlyway_parseInvalidReques(t *testing.T) {
+	tests := []struct {
+		name string
+		opts []testcontainers.ContainerCustomizer
+	}{
+		{
+			name: "missing database url",
+			opts: []testcontainers.ContainerCustomizer{
+				testcontainers.WithImage(flyway.BuildFlywayImageVersion()),
+				flyway.WithUser(defaultPostgresDbUsername),
+				flyway.WithPassword(defaultPostgresDbPassword),
+				flyway.WithMigrations(filepath.Join("testdata", flyway.DefaultMigrationsPath)),
+			},
+		},
+		{
+			name: "missing user",
+			opts: []testcontainers.ContainerCustomizer{
+				testcontainers.WithImage(flyway.BuildFlywayImageVersion()),
+				flyway.WithDatabaseUrl("jdbc:postgresql://localhost:5432/test_db?sslmode=disable"),
+				flyway.WithPassword(defaultPostgresDbPassword),
+				flyway.WithMigrations(filepath.Join("testdata", flyway.DefaultMigrationsPath)),
+			},
+		},
+		{
+			name: "missing password",
+			opts: []testcontainers.ContainerCustomizer{
+				testcontainers.WithImage(flyway.BuildFlywayImageVersion()),
+				flyway.WithDatabaseUrl("jdbc:postgresql://localhost:5432/test_db?sslmode=disable"),
+				flyway.WithUser(defaultPostgresDbUsername),
+				flyway.WithMigrations(filepath.Join("testdata", flyway.DefaultMigrationsPath)),
+			},
+		},
+		{
+			name: "missing migrations",
+			opts: []testcontainers.ContainerCustomizer{
+				testcontainers.WithImage(flyway.BuildFlywayImageVersion()),
+				flyway.WithDatabaseUrl("jdbc:postgresql://localhost:5432/test_db?sslmode=disable"),
+				flyway.WithUser(defaultPostgresDbUsername),
+				flyway.WithPassword(defaultPostgresDbPassword),
+			},
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(tt *testing.T) {
+			testCase := testCase
+
+			//tt.Parallel()
+
+			flywayContainer, err := flyway.RunContainer(context.Background(),
+				testCase.opts...,
+			)
+
+			require.Error(tt, err, "expected error")
+			require.Nil(tt, flywayContainer, "expected nil container")
+		})
+	}
+}
+
 func createTestPostgresContainer(ctx context.Context, nw *testcontainers.DockerNetwork) (*intPostgresContainer, error) {
 	port := fmt.Sprintf("%s/tcp", defaultPostgresPort)
 
