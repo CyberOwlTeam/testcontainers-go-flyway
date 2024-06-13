@@ -30,6 +30,9 @@ func ExampleRunContainer() {
 		flyway.WithDatabaseUrl(postgresContainer.getNetworkUrl()),
 		flyway.WithUser(defaultPostgresDbUsername),
 		flyway.WithPassword(defaultPostgresDbPassword),
+		flyway.WithConnectRetries(3),
+		flyway.WithTable("my_schema_history"),
+		flyway.WithGroup("my_group"),
 		flyway.WithMigrations(filepath.Join("testdata", flyway.DefaultMigrationsPath)),
 	)
 	if err != nil {
