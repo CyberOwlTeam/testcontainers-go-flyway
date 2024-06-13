@@ -21,7 +21,11 @@
 go.work
 go.work.sum
 
-### IntelliJ IDEA ###
+# intellij idea
 *.idea*
 !.idea/runConfigurations
 *.iml*
+
+# build
+/build
+!/build/README.md
