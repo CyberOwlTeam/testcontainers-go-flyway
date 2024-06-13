@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
+	"time"
 
 	"github.com/CyberOwlTeam/flyway"
 
@@ -33,6 +34,7 @@ func ExampleRunContainer() {
 		flyway.WithConnectRetries(3),
 		flyway.WithTable("my_schema_history"),
 		flyway.WithGroup("my_group"),
+		flyway.WithTimeout(1*time.Minute),
 		flyway.WithMigrations(filepath.Join("testdata", flyway.DefaultMigrationsPath)),
 	)
 	if err != nil {

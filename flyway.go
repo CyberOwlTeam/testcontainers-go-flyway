@@ -22,6 +22,9 @@ const (
 	migrateCmd          = "migrate"
 	infoCmd             = "info"
 
+	// wait strategies
+	defaultTimeout time.Duration = 30 * time.Second
+
 	// flyway environment variables
 	flywayEnvUserKey           = "FLYWAY_USER"
 	flywayEnvPasswordKey       = "FLYWAY_PASSWORD"
@@ -30,6 +33,11 @@ const (
 	flywayEnvTableKey          = "FLYWAY_TABLE"
 	flywayEnvConnectRetriesKey = "FLYWAY_CONNECT_RETRIES"
 	flywayEnvLocationsKey      = "FLYWAY_LOCATIONS"
+)
+
+var (
+	waitForValidated = wait.ForLog(`Successfully validated \d+ migration[s]?`).AsRegexp().WithOccurrence(1)
+	waitForApplied   = wait.ForLog(`Successfully applied \d+ migration[s]? to schema`).AsRegexp().WithOccurrence(1)
 )
 
 // FlywayContainer represents the Flyway container type used in the module
@@ -53,9 +61,9 @@ func RunContainer(ctx context.Context, opts ...testcontainers.ContainerCustomize
 			migrateCmd, infoCmd,
 		},
 		WaitingFor: wait.ForAll(
-			wait.ForExit().WithExitTimeout(30*time.Second),
-			wait.ForLog(`Successfully validated \d+ migration[s]?`).AsRegexp().WithOccurrence(1),
-			wait.ForLog(`Successfully applied \d+ migration[s]? to schema`).AsRegexp().WithOccurrence(1),
+			wait.ForExit().WithExitTimeout(defaultTimeout),
+			waitForApplied,
+			waitForValidated,
 		),
 	}
 
@@ -100,6 +108,18 @@ func WithPassword(password string) testcontainers.CustomizeRequestOption {
 
 func WithDatabaseUrl(dbUrl string) testcontainers.CustomizeRequestOption {
 	return withEnvSetting("FLYWAY_URL", dbUrl)
+}
+
+func WithTimeout(timeout time.Duration) testcontainers.CustomizeRequestOption {
+	return func(req *testcontainers.GenericContainerRequest) error {
+		req.WaitingFor = wait.ForAll(
+			wait.ForExit().WithExitTimeout(timeout),
+			waitForApplied,
+			waitForValidated,
+		)
+
+		return nil
+	}
 }
 
 func WithGroup(group string) testcontainers.CustomizeRequestOption {
