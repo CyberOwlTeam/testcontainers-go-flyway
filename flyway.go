@@ -12,7 +12,7 @@ import (
 
 const (
 	DefaultVersion        = "10.15.0"
-	DefaultMigrationsPath = "flyway/sql"
+	DefaultMigrationsPath = "/flyway/sql"
 
 	defaultImagePattern = "flyway/flyway:%s"
 	defaultUser         = "test_user"
@@ -48,7 +48,7 @@ func RunContainer(ctx context.Context, opts ...testcontainers.ContainerCustomize
 			flywayEnvGrouopKey:         "true",
 			flywayEnvTableKey:          defaultTable,
 			flywayEnvConnectRetriesKey: "3",
-			flywayEnvLocationsKey:      fmt.Sprintf("filesystem:/%s", DefaultMigrationsPath),
+			flywayEnvLocationsKey:      fmt.Sprintf("filesystem:%s", DefaultMigrationsPath),
 		},
 		Cmd: []string{
 			migrateCmd, infoCmd,
@@ -128,7 +128,7 @@ func WithMigrations(absHostFilePath string) testcontainers.CustomizeRequestOptio
 			ContainerFilePath: DefaultMigrationsPath,
 		}}
 
-		req.Env["FLYWAY_LOCATIONS"] = fmt.Sprintf("filesystem:/%s", DefaultMigrationsPath)
+		req.Env["FLYWAY_LOCATIONS"] = fmt.Sprintf("filesystem:%s", DefaultMigrationsPath)
 		return nil
 	}
 }
