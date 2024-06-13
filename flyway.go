@@ -50,7 +50,7 @@ func RunContainer(ctx context.Context, opts ...testcontainers.ContainerCustomize
 		},
 		Files: []testcontainers.ContainerFile{
 			{
-				HostFilePath:      filepath.Join("test", defaultFlywayMigrationsPath),
+				HostFilePath:      filepath.Join("testdata", defaultFlywayMigrationsPath),
 				ContainerFilePath: "/" + defaultFlywayMigrationsPath,
 			},
 		},
