@@ -30,7 +30,7 @@ func ExampleRunContainer() {
 		flyway.WithEnvUrl(postgresContainer.getNetworkUrl()),
 		flyway.WithEnvUser(defaultPostgresDbUsername),
 		flyway.WithEnvPassword(defaultPostgresDbPassword),
-		flyway.WithMigrations(filepath.Join("testdata", flyway.DefaultFlywayMigrationsPath)),
+		flyway.WithMigrations(filepath.Join("testdata", flyway.DefaultMigrationsPath)),
 	)
 	if err != nil {
 		log.Fatalf("failed to start container: %s", err) // nolint:gocritic

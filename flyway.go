@@ -11,22 +11,25 @@ import (
 )
 
 const (
-	DefaultFlywayVersion        = "10.15.0"
-	defaultFlywayImagePattern   = "flyway/flyway:%s"
-	defaultFlywayUser           = "test_user"
-	defaultFlywayPassword       = "test_password"
-	defaultFlywayDbUrl          = "test_flyway_db"
-	defaultFlywayTable          = "schema_version"
-	DefaultFlywayMigrationsPath = "flyway/sql"
-	migrateCmd                  = "migrate"
-	infoCmd                     = "info"
-	flywayEnvUserKey            = "FLYWAY_USER"
-	flywayEnvPasswordKey        = "FLYWAY_PASSWORD"
-	flywayEnvUrlKey             = "FLYWAY_URL"
-	flywayEnvGrouopKey          = "FLYWAY_GROUP"
-	flywayEnvTableKey           = "FLYWAY_TABLE"
-	flywayEnvConnectRetriesKey  = "FLYWAY_CONNECT_RETRIES"
-	flywayEnvLocationsKey       = "FLYWAY_LOCATIONS"
+	DefaultVersion        = "10.15.0"
+	DefaultMigrationsPath = "flyway/sql"
+
+	defaultImagePattern = "flyway/flyway:%s"
+	defaultUser         = "test_user"
+	defaultPassword     = "test_password"
+	defaultDbUrl        = "test_flyway_db"
+	defaultTable        = "schema_version"
+	migrateCmd          = "migrate"
+	infoCmd             = "info"
+
+	// flyway environment variables
+	flywayEnvUserKey           = "FLYWAY_USER"
+	flywayEnvPasswordKey       = "FLYWAY_PASSWORD"
+	flywayEnvUrlKey            = "FLYWAY_URL"
+	flywayEnvGrouopKey         = "FLYWAY_GROUP"
+	flywayEnvTableKey          = "FLYWAY_TABLE"
+	flywayEnvConnectRetriesKey = "FLYWAY_CONNECT_RETRIES"
+	flywayEnvLocationsKey      = "FLYWAY_LOCATIONS"
 )
 
 // FlywayContainer represents the Flyway container type used in the module
@@ -39,13 +42,13 @@ func RunContainer(ctx context.Context, opts ...testcontainers.ContainerCustomize
 	req := testcontainers.ContainerRequest{
 		WaitingFor: wait.ForExit().WithExitTimeout(30 * time.Second),
 		Env: map[string]string{
-			flywayEnvUserKey:           defaultFlywayUser,
-			flywayEnvPasswordKey:       defaultFlywayPassword,
-			flywayEnvUrlKey:            defaultFlywayDbUrl,
+			flywayEnvUserKey:           defaultUser,
+			flywayEnvPasswordKey:       defaultPassword,
+			flywayEnvUrlKey:            defaultDbUrl,
 			flywayEnvGrouopKey:         "true",
-			flywayEnvTableKey:          defaultFlywayTable,
+			flywayEnvTableKey:          defaultTable,
 			flywayEnvConnectRetriesKey: "3",
-			flywayEnvLocationsKey:      fmt.Sprintf("filesystem:/%s", DefaultFlywayMigrationsPath),
+			flywayEnvLocationsKey:      fmt.Sprintf("filesystem:/%s", DefaultMigrationsPath),
 		},
 		Cmd: []string{
 			migrateCmd, infoCmd,
@@ -122,17 +125,17 @@ func WithMigrations(absHostFilePath string) testcontainers.CustomizeRequestOptio
 	return func(req *testcontainers.GenericContainerRequest) error {
 		req.Files = []testcontainers.ContainerFile{{
 			HostFilePath:      absHostFilePath,
-			ContainerFilePath: DefaultFlywayMigrationsPath,
+			ContainerFilePath: DefaultMigrationsPath,
 		}}
 
-		req.Env["FLYWAY_LOCATIONS"] = fmt.Sprintf("filesystem:/%s", DefaultFlywayMigrationsPath)
+		req.Env["FLYWAY_LOCATIONS"] = fmt.Sprintf("filesystem:/%s", DefaultMigrationsPath)
 		return nil
 	}
 }
 
 func BuildFlywayImageVersion(version ...string) string {
 	if len(version) > 0 {
-		return fmt.Sprintf(defaultFlywayImagePattern, version[0])
+		return fmt.Sprintf(defaultImagePattern, version[0])
 	}
-	return fmt.Sprintf(defaultFlywayImagePattern, DefaultFlywayVersion)
+	return fmt.Sprintf(defaultImagePattern, DefaultVersion)
 }
