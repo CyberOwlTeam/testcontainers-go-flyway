@@ -23,6 +23,7 @@ import (
 const (
 	defaultPostgresDbVersion  = "16.3"
 	defaultPostgresPort       = "5432"
+	defaultPostgresSrvName    = "pgdb"
 	defaultPostgresDbName     = "test_db"
 	defaultPostgresDbUsername = "postgres"
 	defaultPostgresDbPassword = "postgres"
@@ -51,17 +52,19 @@ func (c *intPostgresContainer) getExternalUrl(ctx context.Context) (string, erro
 func TestFlyway(t *testing.T) {
 	// given
 	ctx := context.Background()
-	networkContainer, err := createTestNetwork(ctx)
-	require.NoError(t, err, "failed creating network container")
-	postgresContainer, err := createTestPostgresContainer(ctx, networkContainer)
+	nw, err := tcnetwork.New(context.Background())
+	require.NoError(t, err, "failed creating network")
+
+	postgresContainer, err := createTestPostgresContainer(ctx, nw)
 	require.NoError(t, err, "failed creating postgres container")
+
 	postgresUrl, err := postgresContainer.getInternalUrl(ctx)
 	require.NoError(t, err, "failed getting internal postgres url")
 
 	// when
 	flywayContainer, err := flyway.RunContainer(ctx,
 		testcontainers.WithImage(flyway.BuildFlywayImageVersion()),
-		flyway.WithNetwork(networkContainer.Name),
+		tcnetwork.WithNetwork([]string{"flyway"}, nw),
 		flyway.WithEnvUrl(postgresUrl),
 		flyway.WithEnvUser(defaultPostgresDbUsername),
 		flyway.WithEnvPassword(defaultPostgresDbPassword),
@@ -85,15 +88,11 @@ func TestFlyway(t *testing.T) {
 	require.Equal(t, 0, state.ExitCode, "container exit code was not as expected: migration failed")
 }
 
-func createTestNetwork(ctx context.Context) (*testcontainers.DockerNetwork, error) {
-	return tcnetwork.New(ctx)
-}
-
-func createTestPostgresContainer(ctx context.Context, networkContainer *testcontainers.DockerNetwork) (*intPostgresContainer, error) {
+func createTestPostgresContainer(ctx context.Context, nw *testcontainers.DockerNetwork) (*intPostgresContainer, error) {
 	port := fmt.Sprintf("%s/tcp", defaultPostgresPort)
 
 	postgresContainer, err := tcpostgres.RunContainer(ctx,
-		tcnetwork.WithNetwork([]string{"db"}, networkContainer),
+		tcnetwork.WithNetwork([]string{defaultPostgresSrvName}, nw),
 		testcontainers.WithImage(fmt.Sprintf("postgres:%s", defaultPostgresDbVersion)),
 		tcpostgres.WithDatabase(defaultPostgresDbName),
 		tcpostgres.WithUsername(defaultPostgresDbUsername),

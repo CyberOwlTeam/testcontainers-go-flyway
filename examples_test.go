@@ -8,16 +8,17 @@ import (
 	"github.com/CyberOwlTeam/flyway"
 
 	"github.com/testcontainers/testcontainers-go"
+	tcnetwork "github.com/testcontainers/testcontainers-go/network"
 )
 
 func ExampleRunContainer() {
 	// runFlywayContainer {
 	ctx := context.Background()
-	networkContainer, err := createTestNetwork(ctx)
+	nw, err := tcnetwork.New(ctx)
 	if err != nil {
 		log.Fatalf("failed to start network: %s", err) // nolint:gocritic
 	}
-	postgresContainer, err := createTestPostgresContainer(ctx, networkContainer)
+	postgresContainer, err := createTestPostgresContainer(ctx, nw)
 	if err != nil {
 		log.Fatalf("failed to start postgres container: %s", err) // nolint:gocritic
 	}
@@ -28,7 +29,7 @@ func ExampleRunContainer() {
 
 	flywayContainer, err := flyway.RunContainer(ctx,
 		testcontainers.WithImage(flyway.BuildFlywayImageVersion()),
-		flyway.WithNetwork(networkContainer.Name),
+		tcnetwork.WithNetwork([]string{"flyway"}, nw),
 		flyway.WithEnvUrl(postgresUrl),
 		flyway.WithEnvUser(defaultPostgresDbUsername),
 		flyway.WithEnvPassword(defaultPostgresDbPassword),

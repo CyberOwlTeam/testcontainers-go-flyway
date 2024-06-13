@@ -124,13 +124,6 @@ func withEnvSetting(key, group string) testcontainers.CustomizeRequestOption {
 	}
 }
 
-func WithNetwork(network string) testcontainers.CustomizeRequestOption {
-	return func(req *testcontainers.GenericContainerRequest) error {
-		req.Networks = append(req.Networks, network)
-		return nil
-	}
-}
-
 func WithMigrations(absHostFilePath string, containerFilePaths ...string) testcontainers.CustomizeRequestOption {
 	return func(req *testcontainers.GenericContainerRequest) error {
 		containerFilePath := defaultFlywayMigrationsPath
