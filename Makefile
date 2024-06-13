@@ -24,5 +24,13 @@ lint: $(GOBIN)/golangci-lint
 	golangci-lint run --out-format=github-actions --path-prefix=. --verbose -c $(ROOT_DIR)/.golangci.yml --fix
 
 .PHONY: test
-test:
-	$(MAKE) test-flyway
+test: $(GOBIN)/gotestsum
+	@echo "Running $* tests..."
+	gotestsum \
+		--format short-verbose \
+		--rerun-fails=5 \
+		--packages="./..." \
+		--junitfile TEST-unit.xml \
+		-- \
+		-coverprofile=coverage.out \
+		-timeout=30m
