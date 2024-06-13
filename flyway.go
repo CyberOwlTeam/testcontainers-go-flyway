@@ -40,7 +40,6 @@ type FlywayContainer struct {
 // RunContainer creates an instance of the Flyway container type
 func RunContainer(ctx context.Context, opts ...testcontainers.ContainerCustomizer) (*FlywayContainer, error) {
 	req := testcontainers.ContainerRequest{
-		WaitingFor: wait.ForExit().WithExitTimeout(30 * time.Second),
 		Env: map[string]string{
 			flywayEnvUserKey:           defaultUser,
 			flywayEnvPasswordKey:       defaultPassword,
@@ -53,6 +52,11 @@ func RunContainer(ctx context.Context, opts ...testcontainers.ContainerCustomize
 		Cmd: []string{
 			migrateCmd, infoCmd,
 		},
+		WaitingFor: wait.ForAll(
+			wait.ForExit().WithExitTimeout(30*time.Second),
+			wait.ForLog(`Successfully validated \d+ migration[s]?`).AsRegexp().WithOccurrence(1),
+			wait.ForLog(`Successfully applied \d+ migration[s]? to schema`).AsRegexp().WithOccurrence(1),
+		),
 	}
 
 	genericContainerReq := testcontainers.GenericContainerRequest{
