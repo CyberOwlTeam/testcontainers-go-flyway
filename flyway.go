@@ -2,7 +2,6 @@ package flyway
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -78,7 +77,10 @@ func RunContainer(ctx context.Context, opts ...testcontainers.ContainerCustomize
 	if err != nil {
 		return nil, fmt.Errorf("failed to get container state: %s", err)
 	} else if state.Running {
-		return nil, errors.New("the container is running")
+		if state.Health != nil {
+			fmt.Printf("the container is running %d/%s\n", state.ExitCode, state.Health.Status)
+		}
+		fmt.Printf("the container is running %d\n", state.ExitCode)
 	} else if state.ExitCode != 0 {
 		if state.Health != nil {
 			return nil, fmt.Errorf("the container state is not healthy: %d/%s", state.ExitCode, state.Health.Status)
