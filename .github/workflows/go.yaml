@@ -1,30 +1,249 @@
-# This workflow will build a golang project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+# This is a go-test workflow file for Github actions.
+# Should require little modification to work with other go repos.
+name: Go Test
+on: workflow_call
 
-name: Go
-
-on:
-  push:
-  pull_request:
-    branches: [ "main" ]
-
+#  workflow_dispatch
+#   push
+env:
+  BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+permissions:
+  id-token: write   # This is required for requesting the JWT
+  contents: read    # This is required for actions/checkout
 jobs:
-
-  build:
+  start-runner:
+    name: Start self-hosted EC2 runner
     runs-on: ubuntu-latest
+    outputs:
+      label: ${{ steps.start-ec2-runner.outputs.label }}
+      ec2-instance-id: ${{ steps.start-ec2-runner.outputs.ec2-instance-id }}
+      subnet: ${{ steps.set-aws-variables.outputs.subnet }}
+      security_group: ${{ steps.set-aws-variables.outputs.security_group }}
+      region: ${{ steps.set-aws-variables.outputs.action_region }}
+      k8s_cluster: ${{steps.set-aws-variables.outputs.k8s_cluster }}
+      k8s_ip: ${{steps.set-aws-variables.outputs.k8s_ip }}
+      env_name: ${{steps.set-aws-variables.outputs.env_name }}
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v4
+      - name: Send Slack Started Message
+        uses: slackapi/slack-github-action@v1.24.0
         with:
-          go-version: '1.21'
+          channel-id: 'dev-builds'
+          slack-message: "Build starting: ${{ github.event.repository.name }} ${{github.head_ref || github.ref_name}} ${{ github.event.head_commit.url }}"
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
 
-      - name: Display Go version
-        run: go version
+      - name: Checkout custom actions
+        uses: actions/checkout@v3
+        with:
+          repository: CyberOwlTeam/custom-github-actions
+          ref: main
+          token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }} # `GH_PAT` is a secret that contains your PAT
+          path: custom-github-actions
 
-      - name: Install dependencies
-        run: go get .
+      - name: Set AWS Variables
+        id: set-aws-variables
+        uses: ./custom-github-actions/set-variables-for-build-deployment
+        with:
+          owl_dev_ami_id: ${{ vars.UBUNTU_AMI_ID }}
+          owl_dev_subnet: ${{ vars.ACTIONS_SUBNET }}
+          owl_dev_security_group: ${{ vars.ACTIONS_SECURITY_GROUP }}
+          owl_dev_region: ${{ vars.AWS_RUNNER_REGION }}
+          owl_dev_k8s_ip: ${{ vars.JANUS_MASTER_PRIVATE_IP }}
+          owl_dev_k8s_cluster: ${{ vars.JANUS_K8S_CLUSTER }}
+          int_dev_ami_id: ${{ vars.DELTA_UBUNTU_AMI_ID }}
+          int_dev_subnet: ${{ vars.DELTA_ACTIONS_SUBNET }}
+          int_dev_security_group: ${{ vars.DELTA_ACTIONS_SECURITY_GROUP }}
+          int_dev_region: ${{ vars.DELTA_AWS_RUNNER_REGION }}
+          int_dev_k8s_ip: ${{ vars.DELTA_MASTER_PRIVATE_IP }}
+          int_dev_k8s_cluster: ${{ vars.DELTA_K8S_CLUSTER }}
+          environment_name: "owl-dev"
 
-      - name: Test
+      - name: Display AWS Variables
+        run: |
+          echo "AWS AMI ID: ${{ steps.set-aws-variables.outputs.ami_id }}"
+          echo "AWS Subnet: ${{ steps.set-aws-variables.outputs.subnet }}"
+          echo "AWS Security Group: ${{ steps.set-aws-variables.outputs.security_group }}"
+          echo "AWS Action Region: ${{ steps.set-aws-variables.outputs.action_region }}"
+          echo "Kubernetes Master IP: ${{steps.set-aws-variables.outputs.k8s_ip}}"
+          echo "Kubernetes Cluster: ${{steps.set-aws-variables.outputs.k8s_cluster}}"
+          echo "Environment Name: ${{steps.set-aws-variables.outputs.env_name}}"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ steps.set-aws-variables.outputs.action_region }}
+
+      - name: Start EC2 runner
+        id: start-ec2-runner
+        uses: machulav/ec2-github-runner@v2
+        with:
+          mode: start
+          github-token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+          ec2-image-id: ${{ steps.set-aws-variables.outputs.ami_id  }} #ami-0c50694dabe4816f8
+          ec2-instance-type: t3.medium
+          subnet-id: ${{ steps.set-aws-variables.outputs.subnet }}
+          security-group-id: ${{ steps.set-aws-variables.outputs.security_group }}
+          aws-resource-tags: > # optional, requires additional permissions
+            [
+              {"Key": "Name", "Value": "CyberOwl-Ubuntu-Github-Runner"},
+              {"Key": "GitHubRepository", "Value": "${{ github.repository }}"}
+            ]
+
+      - name: Set ENV Variables
+        id: set_env_variables
+        env:
+          HOME: "/home/runner"
+          MASTER_IP: ${{  steps.set-aws-variables.outputs.k8s_ip }}
+          KUBE_CONFIG: ${{  steps.set-aws-variables.outputs.kube_config }}
+          K8S_CLUSTER: ${{  steps.set-aws-variables.outputs.k8s_cluster }}
+          APP_NAME: ${{ vars.APP_NAME_FOR_DEPLOYMENT }}
+          ENV_NAME: ${{  steps.set-aws-variables.outputs.env_name }}
+        run:
+          set; echo $KUBE_CONFIG
+
+  checkout:
+    name: Checkout the code and set image tag
+    needs: start-runner # required to start the main job when the runner is ready
+    runs-on: ${{ needs.start-runner.outputs.label }} # run the job on the newly created runner
+    outputs:
+      release_tag: ${{ steps.generate-branch-tag.outputs.release_tag }}
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v3
+      - name: Create Cache DIR
+        run: mkdir -p /home/runner/.cache/go-build
+        continue-on-error: true
+
+      - name: Checkout custom actions
+        uses: actions/checkout@v3
+        with:
+          repository: CyberOwlTeam/custom-github-actions
+          ref: release/0.0.1
+          token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }} # `GH_PAT` is a secret that contains your PAT
+          path: custom-github-actions
+          
+      - name: generate branch tag step
+        uses: ./custom-github-actions/generate-branch-tag
+        id: generate-branch-tag
+      # Use the output from the `generate branch tag` step
+      - name: Get the branch tag
+        run: echo "The branch tag is  ${{ steps.generate-branch-tag.outputs.release_tag }}"
+
+  go-test:
+    name: Go Test
+    needs: [start-runner, checkout] # start-runner # required to start the main job when the runner is ready
+    runs-on: ${{ needs.start-runner.outputs.label }} # run the job on the newly created runner
+    env:
+      HOME: "/home/runner"
+      TESTCONTAINERS_RYUK_DISABLED: "true"
+      GOPATH: "/var/go"
+
+    steps:
+      - name: set PATH
+        id: set_path
+        run: echo "$GOPATH/bin:/opt/pact/bin" >> $GITHUB_PATH
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+        env:
+          GOCACHE: /home/runner/.cache/go-build
+      - uses: actions/setup-go@v4
+        with:
+          go-version: '1.22.1'
+          cache: true
+          cache-dependency-path: 'go.sum'
+        env:
+          GOCACHE: /home/runner/.cache/go-build
+
+      - name: Create Docker Config
+        id: create_docker_config
+        run: |
+          mkdir -p $HOME/.docker/
+          echo '${{ vars.DOCKER_CONFIG }}' > $HOME/.docker/config.json
+
+      - name: Display Go Version
+        id: go_version
+        run: |
+          whoami
+          echo $PATH
+          ls -altr $GOPATH/*
+          go version
+        shell: bash
+
+      - name: Run Test
+        id: run_test
         run: make all
+        shell: bash
+        env:
+          HOME: /home/runner
+          GOPATH: /var/go
+          PATH: $PATH:/usr/local/go/bin:$GOPATH/bin:/usr/sbin:/usr/bin:/sbin:/bin
+          GOCACHE: /home/runner/.cache/go-build
+        continue-on-error: true
+
+      - name: Remove Docker Config
+        id: remove_docker_config
+        run: |
+          rm -rf $HOME/.docker
+
+      - name: Slack Status Code Build and Test Success to dev-builds
+        if: steps.run_test.outcome == 'success'
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          # Unlike the step posting a new message, this step does not accept a channel name.
+          # Please use a channel ID, not a name here.
+          channel-id: 'CJX8N7FV5'
+          update-ts: ${{ steps.slack.outputs.ts }}
+          payload: "{\"text\": \"Code Build and Test PASSED ${{ github.event.repository.name }} ${{github.head_ref || github.ref_name}} ${{ github.event.head_commit.url }}\"}"
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+
+      - name: Slack Status Code Build and Test Failure to dev-builds
+        if: steps.run_test.outcome != 'success'
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          channel-id: 'dev-builds'
+          update-ts: ${{ steps.slack.outputs.ts }}
+          payload: "{\"text\": \"Code Build and Test FAILED ${{ github.event.repository.name }} ${{github.head_ref || github.ref_name}} ${{ github.event.head_commit.url }}\"}"
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN}}
+
+      - name: Slack Status Code Build and Test Failure to dev-build-failure
+        if: steps.run_test.outcome != 'success'
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          channel-id: 'dev-build-failures'
+          slack-message: "Github Actions Code Build and Test FAILED ${{ github.event.repository.name }} ${{github.head_ref || github.ref_name}} ${{ github.event.head_commit.url }}"
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      - name: Fail Job is Build Fails
+        if: steps.run_test.outcome != 'success'
+        run: exit 1
+
+  stop-runner:
+    name: Stop self-hosted EC2 runner
+    needs: [start-runner, checkout, go-test]
+    runs-on: ubuntu-latest
+    if: ${{ always() }} # required to stop the runner even if the error happened in the previous jobs
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ needs.start-runner.outputs.region }}
+
+      - name: Stop EC2 runner
+        uses: machulav/ec2-github-runner@v2
+        with:
+          mode: stop
+          github-token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+          label: ${{ needs.start-runner.outputs.label }}
+          ec2-instance-id: ${{ needs.start-runner.outputs.ec2-instance-id }}
