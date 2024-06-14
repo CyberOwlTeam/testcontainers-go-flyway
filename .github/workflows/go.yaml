@@ -1,10 +1,7 @@
 # This is a go-test workflow file for Github actions.
 # Should require little modification to work with other go repos.
 name: Go Test
-on: workflow_call
-
-#  workflow_dispatch
-#   push
+on: push
 env:
   BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
 permissions:
@@ -123,7 +120,7 @@ jobs:
           ref: release/0.0.1
           token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }} # `GH_PAT` is a secret that contains your PAT
           path: custom-github-actions
-          
+
       - name: generate branch tag step
         uses: ./custom-github-actions/generate-branch-tag
         id: generate-branch-tag
