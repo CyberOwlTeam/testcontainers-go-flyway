@@ -21,10 +21,11 @@
 go.work
 go.work.sum
 
-### IntelliJ IDEA ###
+# intellij idea
 *.idea*
 !.idea/runConfigurations
 *.iml*
 
-*.out
-TEST*.xml
+# build
+/build
+!/build/README.md

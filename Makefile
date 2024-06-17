@@ -30,7 +30,9 @@ test: $(GOBIN)/gotestsum
 		--format short-verbose \
 		--rerun-fails=5 \
 		--packages="./..." \
-		--junitfile TEST-unit.xml \
+		--junitfile ./build/test_unit.xml \
 		-- \
-		-coverprofile=coverage.out \
+		-coverprofile=./build/test_coverage.out \
 		-timeout=30m
+
+all: install lint test
