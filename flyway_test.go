@@ -2,11 +2,13 @@ package flyway_test
 
 import (
 	"context"
-	"github.com/CyberOwlTeam/flyway"
-	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
 	"path/filepath"
 	"testing"
+
+	"github.com/CyberOwlTeam/flyway"
+	"github.com/stretchr/testify/require"
+
+	"github.com/testcontainers/testcontainers-go"
 )
 
 const (

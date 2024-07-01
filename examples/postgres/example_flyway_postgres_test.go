@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/CyberOwlTeam/flyway"
-	"github.com/testcontainers/testcontainers-go"
-	tcnetwork "github.com/testcontainers/testcontainers-go/network"
 	"log"
 	"path/filepath"
 	"time"
+
+	"github.com/CyberOwlTeam/flyway"
+
+	"github.com/testcontainers/testcontainers-go"
+	tcnetwork "github.com/testcontainers/testcontainers-go/network"
 )
 
 func ExampleFlyway_postgres() {
