@@ -3,11 +3,10 @@ package flyway
 import (
 	"context"
 	"fmt"
-	"strconv"
-	"time"
-
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
+	"strconv"
+	"time"
 )
 
 const (

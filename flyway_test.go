@@ -4,10 +4,9 @@ import (
 	"context"
 	"github.com/CyberOwlTeam/flyway"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
 	"path/filepath"
 	"testing"
-
-	"github.com/testcontainers/testcontainers-go"
 )
 
 const (
