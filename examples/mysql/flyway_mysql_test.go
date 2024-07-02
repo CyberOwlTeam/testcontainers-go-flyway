@@ -4,15 +4,17 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"path/filepath"
+	"testing"
 	"time"
 
 	"github.com/CyberOwlTeam/flyway"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/go-connections/nat"
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid"
+	"github.com/stretchr/testify/require"
+
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/mysql"
 	"github.com/testcontainers/testcontainers-go/network"
@@ -33,26 +35,16 @@ type mysqlContainer struct {
 	*mysql.MySQLContainer
 }
 
-func main() {
+func TestFlyway_mysql(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a new docker network
 	nw, err := network.New(context.Background())
-	if err != nil {
-		log.Fatalln("failed to initiate network: ", err)
-	}
+	require.NoError(t, err, "failed creating network")
 
 	// Create a new MySQLContainer
 	dbContainer, err := createTestMySQLContainer(ctx, nw)
-	if err != nil {
-		log.Fatalln("failed to create DB container: ", err)
-	}
-	defer func() {
-		err = dbContainer.Terminate(ctx)
-		if err != nil {
-			log.Println("failed to terminate DB container: ", err)
-		}
-	}()
+	require.NoError(t, err, "failed creating mysql container")
 
 	// Create a Flyway container and run SQL migration
 	flywayContainer, err := flyway.RunContainer(ctx,
@@ -63,27 +55,26 @@ func main() {
 		flyway.WithPassword(mysqlDBPassword),
 		flyway.WithMigrations(filepath.Join("testdata", flyway.DefaultMigrationsPath)),
 	)
-	if err != nil {
-		log.Fatalln("failed to run Flyway container: ", err)
-	}
-	defer func() {
-		err = flywayContainer.Terminate(ctx)
-		if err != nil {
-			log.Println("failed to terminate Flyway container: ", err)
-		}
-	}()
+	require.NoError(t, err, "failed to run container")
+
+	// then
+	t.Cleanup(func() {
+		err := flywayContainer.Terminate(ctx)
+		require.NoError(t, err, "failed to terminate flyway container")
+
+		err = dbContainer.Terminate(ctx)
+		require.NoError(t, err, "failed to terminate mysql container")
+	})
 
 	// Execute some queries on database
 	err = execSampleQuery(ctx, dbContainer)
-	if err != nil {
-		log.Fatalln("failed to execute query", err)
-	}
+	require.NoError(t, err, "failed to execute query")
 
 	// Inspect state of Flyway container
 	state, err := flywayContainer.State(ctx)
-	if err != nil {
-		log.Fatalf("Flyway container exited with state [%#v] and error : %v", state, err)
-	}
+	require.NoError(t, err, "failed to get container state")
+	require.Emptyf(t, state.Error, "failed to get container state")
+	require.Equal(t, 0, state.ExitCode, "container exit code was not as expected: migration failed")
 }
 
 // execSampleQuery executes queries for dbContainer.
