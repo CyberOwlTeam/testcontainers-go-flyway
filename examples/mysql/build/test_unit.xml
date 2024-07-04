@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="2" failures="0" errors="0" time="42.254767">
+	<testsuite tests="2" failures="0" time="40.723000" name="github.com/CyberOwlTeam/flyway/examples/mysql" timestamp="2024-07-02T20:57:27+08:00">
+		<properties>
+			<property name="go.version" value="go1.22.3 linux/amd64"></property>
+		</properties>
+		<testcase classname="github.com/CyberOwlTeam/flyway/examples/mysql" name="TestFlyway_mysql" time="21.320000"></testcase>
+		<testcase classname="github.com/CyberOwlTeam/flyway/examples/mysql" name="ExampleFlyway_mysql" time="19.380000"></testcase>
+	</testsuite>
+</testsuites>
